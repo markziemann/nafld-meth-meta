@@ -1,0 +1,46 @@
+---
+title: "NAFLD meta-analysis"
+author: "Mark Ziemann"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+    fig_width: 7
+    fig_height: 7
+theme: cosmo
+---
+
+Source: https://github.com/markziemann/nafld-meth-meta/nafld.Rmd
+
+## Intro
+
+In this analysis we will be analysing methylation data of patients with/without 
+non-alcoholic fatty liver disease.
+
+There are a couple different individual studies that will be examined here:
+
+* GSE180474 (341 datasets; EPIC beadchip)
+
+* GSE49542 (59 datasets; 450K beadchip)
+
+* GSE31803 (72 datasets; 450K beadchip)
+
+* GSE31803_2 (59 datasets; 450K beadchip)
+
+## References
+
+Phipson B, Maksimovic J, Oshlack A. missMethyl: an R package for analyzing
+data from Illumina's HumanMethylation450 platform. Bioinformatics. 2016 Jan
+15;32(2):286-8. doi: 10.1093/bioinformatics/btv560. Epub 2015 Sep 30. PubMed
+PMID: 26424855.
+
+
+
+## Session info
+
+```{r,sessioninfo}
+sessionInfo()
+```
+END OF REPORT

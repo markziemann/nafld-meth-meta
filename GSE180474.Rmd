@@ -1,0 +1,59 @@
+---
+title: "NAFLD meta-analysis"
+author: "Mark Ziemann"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+    fig_width: 7
+    fig_height: 7
+theme: cosmo
+---
+
+Source: https://github.com/markziemann/nafld-meth-meta/nafld.Rmd
+
+## Intro
+
+In this report, I will take you through a re-analysis methylation data first described by 
+[Johnson et al (2021)](https://www.ncbi.nlm.nih.gov/pubmed/34353365) and available at GEO
+under accession number GSE180474.
+
+In their study, they analysed the DNA methylation patterns of 325 individuals with NAFLD, 
+including 119 with severe fibrosis and 206 with no histological evidence of fibrosis.
+
+The platform used in the study is the Illumina Infinium MethylationEPIC BeadChip assay.
+The authors used a pipeline based on [CATE R package](https://www.ncbi.nlm.nih.gov/pubmed/31439967/), 
+after cell type deconvolution with EpiDISH.
+
+The main conclusions from the original study were:
+
+* Their study identified 7 CpG sites with p<5e-8 associuated with fibrosis.
+
+* Proportions of some cells changed, for example NK cells were higher in samples with fibrosis.
+
+The aim of this work is to;
+
+1. develop the analytical pipelines required for efficient re-analysis of methylation array data,
+
+2. to confirm that we are able to obtain differential methylation results that are similar
+to those obtained in the original study, and
+
+3. to critically evaluate the conclusions made in the original study.
+
+In this report I will be using the missMethyl vignette as a guide to analyse this dataset 
+([Phipson et al, 2015](https://www.ncbi.nlm.nih.gov/pubmed/26424855)).
+
+Previously I curated a list of good and bad probes using the script "filter_probes.Rmd".
+
+
+
+
+In this analysis we will be analysing methylation data of patients with/without 
+non-alcoholic fatty liver disease.
+
+There are a couple different individual studies that will be examined here:
+
+* GSE180474 (341 datasets; EPIC beadchip)
+
