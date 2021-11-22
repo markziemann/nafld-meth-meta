@@ -29,7 +29,7 @@ myscree <- function(mx,n=10,main="") {
   pc <- princomp(mx)$sdev
   pcp <- pc/sum(pc)*100
   pcp <- pcp[1:10]
-  barplot(pcp,cex.names = 1,las=2,ylim=c(0,60),
+  barplot(pcp,cex.names = 1,las=2,ylim=c(0,max(pcp)*1.1),
       ylab="percent (%) variance explained", main=main)
   text((0.5:length(pcp)*1.2),pcp,label=signif(pcp,3),pos=3,cex=0.8)
 }
@@ -215,25 +215,29 @@ make_dm_plots <- function(dm,name,mx,mxs,groups=groups,confects=confects,dmr,com
 make_forest_plots <- function(comp) {
 comp_data <- 
   structure(list(
+    "labeltext" = rownames(comp$up_comp) ,
     "mean"  = comp$up_comp$OR , 
     "lower" = comp$up_comp$lowerCI ,
     "upper" = comp$up_comp$upperCI ,
     .Names = c("mean", "lower", "upper"), 
     row.names = c(NA, -11L), 
     class = "data.frame"))
-comp_data <- as.data.frame(comp_data[1:3],row.names = rownames(comp$up_comp) )
-forestplot(comp_data,title = "hypermethylated")
+comp_data <- as.data.frame(comp_data[1:4],row.names = rownames(comp$up_comp) )
+forestplot(comp_data, title = "hypermethylated" , grid=TRUE , 
+    labeltext=matrix(rownames(comp_data)) )
 
 comp_data <- 
   structure(list(
+    "labeltext" = rownames(comp$dn_comp) ,
     "mean"  = comp$dn_comp$OR , 
     "lower" = comp$dn_comp$lowerCI ,
     "upper" = comp$dn_comp$upperCI ,
     .Names = c("mean", "lower", "upper"), 
     row.names = c(NA, -11L), 
     class = "data.frame"))
-comp_data <- as.data.frame(comp_data[1:3],row.names = rownames(comp$dn_comp) )
-forestplot(comp_data,title = "hypomethylated")
+comp_data <- as.data.frame(comp_data[1:4],row.names = rownames(comp$dn_comp) )
+forestplot(comp_data, title = "hypomethylated" , grid=TRUE , 
+    labeltext=matrix(rownames(comp_data)))
 }
 
 # this is a function which will perform differential methylation analysis
@@ -268,23 +272,43 @@ dm_analysis <- function(samplesheet,sex,groups,mx,name,myann,beta) {
     return(dat)
 }
 
-# this function performs DMRcate for peak calling
-run_dmrcate <- function(mx,design) {
-  fit.reduced <- lmFit(mx,design)
-  fit.reduced <- eBayes(fit.reduced)
+# this function performs DMRcate for peak calling 450K data
+run_dmrcate_450k <- function(mx,design) {
+    fit.reduced <- lmFit(mx,design)
+    fit.reduced <- eBayes(fit.reduced)
   
-  dmg <- makeGenomicRatioSetFromMatrix(mx, rownames = NULL, pData = NULL ,
-                                       array = "IlluminaHumanMethylation450k" ,
-                                       mergeManifest = FALSE, what = "M")
+    dmg <- makeGenomicRatioSetFromMatrix(mx, rownames = NULL, pData = NULL ,
+        array = "IlluminaHumanMethylation450k" ,
+        mergeManifest = FALSE, what = "M")
   
-  myannotation <- cpg.annotate("array", dmg, arraytype = "450K",
-                               analysis.type="differential", design=design, coef=3)
+    myannotation <- cpg.annotate("array", dmg, arraytype = "450K",
+        analysis.type="differential", design=design, coef=3)
   
-  dmrcoutput <- dmrcate(myannotation, lambda=1000, C=3)
+    dmrcoutput <- dmrcate(myannotation, lambda=1000, C=3)
   
-  dmr <- extractRanges(dmrcoutput, genome = "hg19")
+    dmr <- extractRanges(dmrcoutput, genome = "hg19")
   
-  return(dmr)
+    return(dmr)
+}
+
+# this function performs DMRcate for peak calling EPIC data
+run_dmrcate_epic <- function(mx,design) {
+    fit.reduced <- lmFit(mx,design)
+    fit.reduced <- eBayes(fit.reduced)
+
+    dmg <- makeGenomicRatioSetFromMatrix(mx, rownames = NULL, pData = NULL ,
+        array = "IlluminaHumanMethylationEPIC" ,				
+        annotation = "ilm10b4.hg19",
+        mergeManifest = FALSE, what = "M")
+
+    myannotation <- cpg.annotate("array", dmg, arraytype = "EPIC",
+        analysis.type="differential", design=design, coef=3)
+
+    dmrcoutput <- dmrcate(myannotation, lambda=1000, C=3)
+
+    dmr <- extractRanges(dmrcoutput, genome = "hg19")
+
+    return(dmr)
 }
 
 compartment_enrichment <- function(dma) {

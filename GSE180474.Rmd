@@ -47,13 +47,300 @@ In this report I will be using the missMethyl vignette as a guide to analyse thi
 
 Previously I curated a list of good and bad probes using the script "filter_probes.Rmd".
 
+## Obtaining custom functions and array annotations
+
+```{r,annotation}
+
+source("meth_functions.R")
+library("kableExtra")
+anno <- getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)
+myann <- data.frame(anno[,c("UCSC_RefGene_Name","Regulatory_Feature_Group","Islands_Name","Relation_to_Island")])
+promoters <- myann[grep("Prom",myann$Regulatory_Feature_Group),]
+
+```
+
+## Sample sheet
+
+```{r,samplesheet1}
+
+ss <- read.table("samplesheet.tsv",header=TRUE)
+ss <- ss[grep("GSE180474",ss$study_id),]
+dim(ss)
+
+ss$sex <- factor(ss$sex)
+ss$nafld_stage <- factor(ss$nafld_stage)
+
+ss %>% kbl() %>% kable_paper("hover", full_width = F)
+
+```
 
 
+## Download
 
-In this analysis we will be analysing methylation data of patients with/without 
-non-alcoholic fatty liver disease.
+Array manifest: [GSE180474_RAW.tar](https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE180474&format=file)
 
-There are a couple different individual studies that will be examined here:
+Meth signal, unmeth signal and detection p-val: [GSE180474_MatrixSignalIntensities.csv](https://ftp.ncbi.nlm.nih.gov/geo/series/GSE180nnn/GSE180474/suppl/GSE180474_MatrixSignalIntensities.csv.gz)
 
-* GSE180474 (341 datasets; EPIC beadchip)
+Detection p-val only: [GSE180474_MatrixProcessed.csv.gz](https://ftp.ncbi.nlm.nih.gov/geo/series/GSE180nnn/GSE180474/suppl/GSE180474_MatrixProcessed.csv.gz)
 
+
+```{r,download}
+
+GSE="GSE180474"
+
+ARRAY_DATA_DIR=paste(GSE,"_data",sep="")
+
+ARRAY_DATA=paste(ARRAY_DATA_DIR,"GSE180474_MatrixSignalIntensities.csv.gz",sep="/")
+
+DATA_URL="https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE180474&format=file&file=GSE180474%5FMatrixSignalIntensities%2Ecsv%2Egz"
+#https://ftp.ncbi.nlm.nih.gov/geo/series/GSE180nnn/GSE180474/suppl/GSE180474_MatrixSignalIntensities.csv.gz"
+
+if(!dir.exists(ARRAY_DATA_DIR)){
+
+  dir.create(ARRAY_DATA_DIR)
+
+  #download.file(DATA_URL, destfile=ARRAY_DATA) 
+  system("wget -O GSE180474_data/GSE180474_MatrixSignalIntensities.csv.gz  https://ftp.ncbi.nlm.nih.gov/geo/series/GSE180nnn/GSE180474/suppl/GSE180474_MatrixSignalIntensities.csv.gz")
+
+}
+
+```
+
+Load in R. Calculate M-values and beta values and do an multidimensional scaling (MDS) analysis.
+
+A scree plot shows the amount of variance that is explained by the principal components.
+
+Run the MDS plot to see the clustering of the samples.
+This should reveal that the samples cluster by sex and should help to confirm the sample sheet.
+
+```{r,load_incl_sex}
+
+# If testing, use the smaller test file
+x <- read.csv("GSE180474_data/GSE180474_MatrixSignalIntensities.csv.gz",header=TRUE,row.names=1)
+#x <- read.csv("GSE180474_data/GSE180474_MatrixSignalIntensities_test.csv.gz",header=TRUE,row.names=1)
+
+pvals <- x[,grep("Detection",colnames(x))]
+meth <- x[,grep("Methylated",colnames(x))]
+unmeth <- x[,grep("Unmethylated",colnames(x))]
+remove(x)
+lapply(list(pvals,meth,unmeth),dim)
+
+colnames(pvals) <- ss$id
+colnames(meth) <- ss$id
+colnames(unmeth) <- ss$id
+
+# remove samples with more than 1% of probes with a detection p-value > 0.001
+bad_samples <- which(apply(pvals, 2, function(x) { length(which(x > 0.01)) }) > nrow(pvals)/100)
+length(bad_samples)
+
+# remove probes with detection p-value is > 0.01 in more than 5% of samples
+bad_probes <- which(apply(pvals, 1, function(x) { length(which(x > 0.01)) })> ncol(pvals)/20)
+length(bad_probes)
+pvals <- pvals[which(!rownames(pvals) %in% names(bad_probes)),]
+meth <- meth[which(!rownames(pvals) %in% names(bad_probes)),]
+unmeth <- unmeth[which(!rownames(pvals) %in% names(bad_probes)),]
+
+Mval <- log2((meth + 100)/(unmeth + 100))
+beta <- meth / (meth + unmeth )
+
+myscree(Mval,main="incl sex chr")
+
+mydist <- plotMDS(Mval)
+
+colour_palette=brewer.pal(n = length(levels(ss$nafld_stage)), name = "Paired")
+
+colours <- colour_palette[as.integer(factor(ss$nafld_stage))]
+plotMDS(mydist, labels=ss$nafld,col=colours,main="sex chromosomes included")
+legend("bottom",legend=levels(ss$nafld_stage),pch=16,cex=1.2,col=levels(factor(colours)),title="NAFLD stage")
+
+colours <- colour_palette[as.integer(factor(ss$sex))]
+plotMDS(mydist, labels=ss$sex, col=colours, main="sex chromosomes included")
+legend("bottom", legend=levels(ss$sex), pch=16, cex=1.2, col=colour_palette, title="Sex")
+
+colours <- colour_palette[as.integer(factor(ss$sex))]
+plotMDS(mydist, labels=ss$id, col=colours, main="sex chromosomes included")
+legend("bottom", legend=levels(ss$sex), pch=16, cex=1.2, col=colour_palette, title="Sex")
+
+colours <- gsub("2","lightblue",gsub("1","pink",as.character(as.numeric(ss$sex))))
+plot(mydist, pch=19,cex=2,col=colours,main="sex chromosomes included",
+  xlab="Leading logFC dim 1",ylab="Leading logFC dim 2")
+text(mydist, labels=ss$nafld,cex=0.6)
+legend("bottom",legend=levels(ss$sex),pch=16,cex=1.2,col=c("pink","lightblue"),title="sex")
+
+```
+
+There is a male (GSM5463580) that needs to be excluded because it looks like a female.
+
+```{r,exclude1}
+
+meth <- meth[,-grep("GSM5463580",colnames(meth))]
+unmeth <- unmeth[,-grep("GSM5463580",colnames(unmeth))]
+pvals <- pvals[,-grep("GSM5463580",colnames(pvals))]
+ss <- ss[which(ss$id!="GSM5463580"),]
+
+```
+
+Now exclude sex chromosomes and redo the MDS plot.
+
+Here are the numbers of probes on the X, Y which are being excluded.
+
+```{r,excl_sex_chr}
+
+chrxy <- rownames(anno)[which(anno$chr == "chrX" | anno$chr == "chrY")]
+length(chrxy)
+
+meth <- meth[which(!rownames(meth) %in% chrxy),]
+unmeth <- unmeth[which(!rownames(unmeth) %in% chrxy),]
+pvals <- pvals[which(!rownames(pvals) %in% chrxy),]
+
+lapply(list(pvals,meth,unmeth),dim)
+
+Mval <- log2((meth + 100)/(unmeth + 100))
+beta <- meth / (meth + unmeth )
+
+remove(meth,unmeth,pvals)
+
+myscree(Mval,main="incl sex chr")
+
+mydist <- plotMDS(Mval)
+
+colour_palette=brewer.pal(n = length(levels(ss$nafld_stage)), name = "Paired")
+
+colours <- colour_palette[as.integer(factor(ss$nafld_stage))]
+plotMDS(mydist, labels=ss$nafld,col=colours,main="sex chromosomes excluded")
+legend("topleft",legend=levels(ss$nafld_stage),pch=16,cex=1.2,col=levels(factor(colours)),title="NAFLD stage")
+
+colours <- colour_palette[as.integer(factor(ss$sex))]
+plotMDS(mydist, labels=ss$sex, col=colours, main="sex chromosomes excluded")
+legend("topleft", legend=levels(ss$sex), pch=16, cex=1.2, col=colour_palette, title="Sex")
+
+colours <- colour_palette[as.integer(factor(ss$sex))]
+plotMDS(mydist, labels=ss$id, col=colours, main="sex chromosomes excluded")
+legend("topleft", legend=levels(ss$sex), pch=16, cex=1.2, col=colour_palette, title="Sex")
+
+colours <- gsub("2","lightblue",gsub("1","pink",as.character(as.numeric(ss$sex))))
+plot(mydist, pch=19,cex=2,col=colours,main="sex chromosomes excluded",
+  xlab="Leading logFC dim 1",ylab="Leading logFC dim 2")
+text(mydist, labels=ss$nafld,cex=0.6)
+legend("topleft",legend=levels(ss$sex),pch=16,cex=1.2,col=c("pink","lightblue"),title="sex")
+
+```
+
+## Differential analysis
+
+The main contrast that would be of interest to us in this study is the comparison of 
+__0_2 (216) vs 3_4 (124)__ in which we will examine differentially methylation by NAFLD severity.
+The covariates that can be considered are sex, age, BMI, anti-diabetic medication, and potentially
+cell type composition.
+
+```{r,dm1}
+
+design <- model.matrix(~ ss$sex + ss$age + ss$bmi + ss$dm2_meds + ss$nafld_stage)
+fit.reduced <- lmFit(Mval,design)
+fit.reduced <- eBayes(fit.reduced)
+dm <- topTable(fit.reduced,coef=ncol(summary(decideTests(fit.reduced))), number = Inf)
+dma <- merge(myann,dm,by=0)
+dma <- dma[order(dma$P.Value),]
+dm_up <- rownames(subset(dm,adj.P.Val<0.05 & logFC>0))
+dm_dn <- rownames(subset(dm,adj.P.Val<0.05 & logFC<0))
+sig <- min(length(dm_up),length(dm_dn))
+confects <- limma_confects(fit.reduced, coef=3, fdr=0.05)
+if (sig > 10) {
+    dmr <- run_dmrcate_epic(mx=as.matrix(Mval),design=design) 
+    dmr %>% kbl() %>% kable_paper("hover", full_width = F)
+    comp <- compartment_enrichment(dma)
+    comp %>% kbl() %>% kable_paper("hover", full_width = F)
+    cgi <- cgi_enrichment(dma)
+    cgi %>% kbl() %>% kable_paper("hover", full_width = F)
+} else {
+    dmr <- NULL
+    comp <- NULL
+    cgi <- NULL
+}
+
+```
+
+A summary of results for all probes considered.
+
+
+```{r,res1}
+
+summary(decideTests(fit.reduced))
+
+```
+
+A table of the top results, ranked by small p-values.
+
+```{r,res2}
+
+head(dma,20) %>% kbl() %>% kable_paper("hover", full_width = F)
+
+```
+
+## Plots
+
+1. Volcano plot.
+Gives an overview of the number of probes that gave a statistically significant differential methylation signal with limma (FDR<0.05; red) compared to not significant (grey).
+Also given an idea about whether the results are balanced in terms of hyper- or hypo-methylation.
+
+2. Beeswarm plots of the 15 CpG probes with the smallest limma p-values.
+This allows us to visualise the intragroup and between group methylation differences.
+
+3. Heatmap of the 50 CpG probes with the smallest limma p-values.
+Again this is a good way to visualise the intragroup and between group methylation differences.
+
+4. Beeswarm plots of the 15 CpG probes with the largest confident effect sizes.
+The selection of probes with the largest confident effect sizes is conducted with the topconfects package
+([Harrison et al, 2019](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1674-7)).
+
+5. Heatmap of the 50 CpG probes with largest confident effect sizes.
+
+6. Circos plot of the differentially methylate regions DMRs as identified by DMRcate.
+
+
+```{r,dmplots}
+
+make_dm_plots(dm = dm ,name="GSE180474_NAFLD", mx=beta ,mxs=as.matrix(Mval), groups = ss$nafld_stage,
+    confects=confects,dmr = dmr, comp=comp, cgi=cgi)
+
+```
+
+```{r,dmrs}
+
+dmr <- as.data.frame(dmr)
+
+dmr_up <- subset(dmr, meandiff > 0.01 & Stouffer < 0.01)
+DMR_UP_N=nrow(dmr_up)
+head(dmr_up) %>% kbl() %>% kable_paper("hover", full_width = F)
+
+dmr_dn <- subset(dmr, meandiff < 0.01 & Stouffer < 0.01)
+DMR_DN_N=nrow(dmr_dn)
+head(dmr_dn) %>% kbl() %>% kable_paper("hover", full_width = F)
+
+HEADER=paste(DMR_UP_N,"DMRs hypermethylated;", DMR_DN_N, "DMRs hypomethylated")
+plot(dmr$meandiff, -log(dmr$Stouffer), main=HEADER,
+    xlab="mean delta beta value", ylab="-log10 Stouffer value")
+grid()
+
+```
+
+## Export results
+
+```{r,output_results}
+
+write.table(dma,file="GSE180474_dm.tsv",sep="\t",quote=FALSE)
+saveRDS(dma,file="GSE180474_dm.rds")
+
+```
+
+## Findings
+
+TODO
+
+## Session information
+
+```{r,sessioninfo}
+
+sessionInfo()
+
+```
